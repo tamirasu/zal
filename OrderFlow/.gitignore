@@ -1,0 +1,7 @@
+data/
+inbox/
+*.tmp
+bin/
+obj/
+.vs/
+*.user
