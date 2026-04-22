@@ -1,6 +1,8 @@
 using OrderFlow.Console.Data;
 using OrderFlow.Console.Models;
+using OrderFlow.Console.Persistence;
 using OrderFlow.Console.Services;
+using OrderFlow.Console.Watchers;
 using System.Diagnostics;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -192,5 +194,108 @@ for (int i = 0; i < 5; i++)
                       $"przychód={safe.TotalRevenue,14:C} {(revenueOk ? "✓" : "✗")}  " +
                       $"błędy={safe.ProcessingErrors.Count}");
 }
+
+// =====================================================================
+// LABORATORIUM 3
+// =====================================================================
+Console.WriteLine("\n\n╔══════════════════════════════════════════╗");
+Console.WriteLine("║       LABORATORIUM 3                     ║");
+Console.WriteLine("╚══════════════════════════════════════════╝");
+
+var repo    = new OrderRepository();
+var builder = new XmlReportBuilder();
+var lab3Orders = SampleData.GetOrders();
+
+// ========== Zadanie 1: JSON + XML round-trip ==========
+Console.WriteLine("\n╔══════════════════════════════════════╗");
+Console.WriteLine("║  ZADANIE 1 — JSON + XML round-trip    ║");
+Console.WriteLine("╚══════════════════════════════════════╝");
+
+const string jsonPath = "data/orders.json";
+const string xmlPath  = "data/orders.xml";
+
+// Zapis
+await repo.SaveToJsonAsync(lab3Orders, jsonPath);
+await repo.SaveToXmlAsync(lab3Orders, xmlPath);
+Console.WriteLine($"\nZapisano {lab3Orders.Count} zamówień → {jsonPath}  i  {xmlPath}");
+
+// Wczytaj z powrotem
+var fromJson = await repo.LoadFromJsonAsync(jsonPath);
+var fromXml  = await repo.LoadFromXmlAsync(xmlPath);
+
+// Porównanie round-trip
+decimal origTotal = lab3Orders.Sum(o => o.TotalAmount);
+decimal jsonTotal = fromJson.Sum(o => o.TotalAmount);
+decimal xmlTotal  = fromXml.Sum(o => o.TotalAmount);
+
+Console.WriteLine($"\n  Oryginał:  count={lab3Orders.Count}  suma={origTotal:C}");
+Console.WriteLine($"  Z JSON:    count={fromJson.Count}  suma={jsonTotal:C}  {(jsonTotal == origTotal ? "✓" : "✗")}");
+Console.WriteLine($"  Z XML:     count={fromXml.Count}  suma={xmlTotal:C}  {(xmlTotal == origTotal ? "✓" : "✗")}");
+
+// Test: brakujący plik → pusta lista (bez wyjątku)
+var empty = await repo.LoadFromJsonAsync("data/nieistniejacy.json");
+Console.WriteLine($"\n  Brakujący plik → lista: {empty.Count} elementów ✓");
+
+// ========== Zadanie 2: LINQ to XML report ==========
+Console.WriteLine("\n╔══════════════════════════════════════╗");
+Console.WriteLine("║  ZADANIE 2 — Raport XML (LINQ to XML) ║");
+Console.WriteLine("╚══════════════════════════════════════╝");
+
+const string reportPath = "data/report.xml";
+var report = builder.BuildReport(lab3Orders);
+await builder.SaveReportAsync(report, reportPath);
+Console.WriteLine($"\nRaport zapisany → {reportPath}");
+
+// Podgląd struktury (pierwsze 12 linii)
+var reportLines = (await File.ReadAllTextAsync(reportPath)).Split('\n');
+Console.WriteLine("  Podgląd (pierwsze 12 linii):");
+foreach (var line in reportLines.Take(12))
+    Console.WriteLine("  " + line.TrimEnd());
+
+// FindHighValueOrderIds z pliku
+var highValueIds = await builder.FindHighValueOrderIdsAsync(reportPath, 1000m);
+Console.WriteLine($"\n  Zamówienia > 1000 zł (z pliku XML): [{string.Join(", ", highValueIds)}]");
+
+// ========== Zadanie 3: InboxWatcher ==========
+Console.WriteLine("\n╔══════════════════════════════════════╗");
+Console.WriteLine("║  ZADANIE 3 — InboxWatcher             ║");
+Console.WriteLine("╚══════════════════════════════════════╝");
+
+// Osobny pipeline z subskrybentami dla watcher demo
+var inboxPipeline = new OrderPipeline(new OrderValidator());
+inboxPipeline.StatusChanged += (_, e) =>
+    Console.WriteLine($"  [PIPE]  #{e.Order.Id} {e.OldStatus} → {e.NewStatus}");
+inboxPipeline.ValidationCompleted += (_, e) =>
+    Console.WriteLine($"  [VALID] #{e.Order.Id} {(e.IsValid ? "OK ✓" : "FAIL ✗")}");
+
+using var watcher = new InboxWatcher("inbox", inboxPipeline, repo);
+Console.WriteLine("\n[INBOX] Watcher aktywny. Wrzucam 3 pliki testowe co 2 sekundy...\n");
+
+for (int i = 1; i <= 3; i++)
+{
+    await Task.Delay(2000);
+
+    // Każdy plik zawiera 2 zamówienia z unikalnymi Id
+    var testOrders = SampleData.GetOrders()
+        .Take(2)
+        .Select((o, idx) => new Order
+        {
+            Id         = 1000 + i * 10 + idx,
+            CustomerId = o.CustomerId,
+            Customer   = o.Customer,
+            Items      = o.Items,
+            Status     = OrderStatus.New,
+            CreatedAt  = DateTime.Now
+        })
+        .ToList();
+
+    var inboxFile = Path.Combine("inbox", $"test_batch_{i}.json");
+    await repo.SaveToJsonAsync(testOrders, inboxFile);
+    Console.WriteLine($"[TEST]  Wrzucono: test_batch_{i}.json ({testOrders.Count} zamówienia)");
+}
+
+// Czekamy aż watcher przetworzy wszystkie pliki
+await Task.Delay(4000);
+Console.WriteLine("\n[INBOX] Demo zakończone.");
 
 Console.WriteLine("\nDone.");
