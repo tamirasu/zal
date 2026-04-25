@@ -20,4 +20,9 @@ public class Product
     public string Description { get; set; } = string.Empty;
 
     public int StockQuantity { get; set; }
+
+    // Nawigacja EF Core
+    [JsonIgnore]
+    [XmlIgnore]
+    public List<OrderItem> OrderItems { get; set; } = new();
 }
