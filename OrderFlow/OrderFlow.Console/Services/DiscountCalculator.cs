@@ -12,6 +12,8 @@ public class DiscountCalculator
         var rate = 0m;
         if (order.Customer.IsVip)
             rate += 0.10m;
+        if (order.TotalAmount > 1000m)
+            rate += 0.05m;
         return rate;
     }
 }
