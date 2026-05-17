@@ -51,4 +51,19 @@ public class DiscountCalculatorTests
         // Assert — 10% z 500 = 50
         Assert.Equal(50m, discount);
     }
+
+    // ─── Reguła 3: zamówienie > 1000 zł → dodatkowe 5% ──────────────────────
+
+    [Fact]
+    public void CalculateDiscount_StandardOver1000_ReturnsFivePercent()
+    {
+        // Arrange
+        var order = CreateOrder(isVip: false, totalAmount: 2000m);
+
+        // Act
+        var discount = _calc.CalculateDiscount(order);
+
+        // Assert — 5% z 2000 = 100
+        Assert.Equal(100m, discount);
+    }
 }
