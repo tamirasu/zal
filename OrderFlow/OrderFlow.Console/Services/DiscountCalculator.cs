@@ -5,7 +5,7 @@ namespace OrderFlow.Console.Services;
 public class DiscountCalculator
 {
     public decimal CalculateDiscount(Order order)
-        => CalculateRate(order) * order.TotalAmount;
+        => Math.Min(CalculateRate(order), 0.25m) * order.TotalAmount;
 
     protected virtual decimal CalculateRate(Order order)
     {
