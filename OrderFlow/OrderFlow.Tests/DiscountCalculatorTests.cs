@@ -94,4 +94,26 @@ public class DiscountCalculatorTests
         // Assert — 10+5 = 15% z 2000 = 300
         Assert.Equal(300m, discount);
     }
+
+    // ─── Reguła 5: maksymalny rabat 25% ──────────────────────────────────────
+
+    [Fact]
+    public void CalculateDiscount_RateExceedsCap_DiscountCappedAt25Percent()
+    {
+        // Arrange — podklasa zwraca 30% aby przetestować cap
+        var calc = new OverrideRateCalculator(0.30m);
+        var order = CreateOrder(isVip: true, totalAmount: 1000m);
+
+        // Act
+        var discount = calc.CalculateDiscount(order);
+
+        // Assert — 25% z 1000 = 250 (nie 300)
+        Assert.Equal(250m, discount);
+    }
+
+    // Pomocnicza podklasa do testowania limitu
+    private sealed class OverrideRateCalculator(decimal fixedRate) : DiscountCalculator
+    {
+        protected override decimal CalculateRate(Order order) => fixedRate;
+    }
 }
