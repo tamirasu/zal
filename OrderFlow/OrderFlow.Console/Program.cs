@@ -532,6 +532,67 @@ catch (InvalidOperationException ex)
     Console.WriteLine($"    → Rollback: {ex.Message}");
 }
 
+// =====================================================================
+// LABORATORIUM 5 — Testy i REST API
+// =====================================================================
+
+Console.WriteLine("\n\n╔══════════════════════════════════════════╗");
+Console.WriteLine("║       LABORATORIUM 5 — Testy i API       ║");
+Console.WriteLine("╚══════════════════════════════════════════╝");
+
+Console.WriteLine("\n╔══════════════════════════════════════╗");
+Console.WriteLine("║  ZADANIE 2 — DiscountCalculator       ║");
+Console.WriteLine("╚══════════════════════════════════════╝");
+
+var discountCalc = new DiscountCalculator();
+Console.WriteLine("\n  Kalkulacja rabatów (DiscountCalculator):");
+foreach (var o in orders.Take(4))
+{
+    var disc = discountCalc.CalculateDiscount(o);
+    Console.WriteLine($"    #{o.Id} {o.Customer.Name,-20} PLN {o.TotalAmount,8:F2}  rabat: {disc,7:F2}");
+}
+
+Console.WriteLine("\n╔══════════════════════════════════════╗");
+Console.WriteLine("║  ZADANIE 3 — CurrencyService (NBP)   ║");
+Console.WriteLine("╚══════════════════════════════════════╝");
+
+using var httpClient5 = new System.Net.Http.HttpClient
+    { BaseAddress = new Uri("https://api.nbp.pl") };
+var currencyService   = new CurrencyService(httpClient5);
+var orderConverter    = new OrderCurrencyConverter(currencyService);
+
+using var db5 = new OrderFlowContext();
+var ordersForConv = await db5.Orders
+    .Include(o => o.Customer)
+    .Include(o => o.Items)
+    .OrderByDescending(o => o.Id)
+    .Take(3)
+    .ToListAsync();
+
+try
+{
+    var usdRate = await currencyService.GetRateAsync("USD");
+    var eurRate = await currencyService.GetRateAsync("EUR");
+    Console.WriteLine($"\n  Kursy NBP:  USD/PLN = {usdRate:F4}   EUR/PLN = {eurRate:F4}");
+    Console.WriteLine("\n  Wartości ostatnich zamówień:");
+    Console.WriteLine($"    {"#",-5} {"Klient",-20} {"PLN",9} {"USD",9} {"EUR",9}");
+    Console.WriteLine($"    {new string('─', 54)}");
+    foreach (var o in ordersForConv)
+    {
+        var usd = await orderConverter.ConvertOrderTotalAsync(o, "USD");
+        var eur = await orderConverter.ConvertOrderTotalAsync(o, "EUR");
+        Console.WriteLine($"    #{o.Id,-4} {o.Customer.Name,-20} {o.TotalAmount,8:F2} {usd,8:F2} {eur,8:F2}");
+    }
+}
+catch (CurrencyServiceException ex)
+{
+    Console.WriteLine($"  [!] NBP API error: {ex.Message}");
+}
+catch (System.Net.Http.HttpRequestException ex)
+{
+    Console.WriteLine($"  [!] Brak połączenia z NBP API: {ex.Message}");
+}
+
 Console.WriteLine("\nDone.");
 
 // ─── Lokalna metoda transakcji ────────────────────────────────────────
