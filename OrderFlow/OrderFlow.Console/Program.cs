@@ -486,6 +486,14 @@ var dynResult = dynRaw
 Console.WriteLine($"\n  Q5 — Dynamiczne: status={dynStatus}, min={dynMinAmount:C}:");
 dynResult.ForEach(x => Console.WriteLine($"    #{x.Id} {x.Name,-18} {x.Total,8:C}"));
 
+// Przywróć stany magazynowe (mogły być wyzerowane przez poprzedni run)
+foreach (var p in await db.Products.ToListAsync())
+{
+    var orig = SampleData.Products.FirstOrDefault(sp => sp.Id == p.Id);
+    if (orig != null) p.StockQuantity = orig.StockQuantity;
+}
+await db.SaveChangesAsync();
+
 // Transakcja — sukces (tworzymy świeże zamówienie w statusie New)
 Console.WriteLine("\n  [TXN] Scenariusz sukcesu:");
 var txOrder = new Order
